@@ -168,4 +168,30 @@ describe('LanguageManager', () => {
         const result = manager.detectLanguageFromPath('Dockerfile');
         expect(['dockerfile', 'unknown']).toContain(result);
     });
+
+    test('should handle edge cases in language detection', () => {
+        // Test empty path
+        expect(manager.detectLanguageFromPath('')).toBe('unknown');
+        
+        // Test path with no extension
+        expect(manager.detectLanguageFromPath('README')).toBe('unknown');
+        
+        // Test path with multiple dots
+        expect(manager.detectLanguageFromPath('config.test.js')).toBe('javascript');
+        
+        // Test case sensitivity
+        expect(manager.detectLanguageFromPath('Test.JS')).toBe('javascript');
+        expect(manager.detectLanguageFromPath('FILE.JAVA')).toBe('java');
+    });
+
+    test('should handle special cases with extensions', () => {
+        // Test with leading dot
+        expect(manager.detectLanguageFromPath('.gitignore')).toBe('unknown');
+        
+        // Test with trailing slash (directory)
+        expect(manager.detectLanguageFromPath('src/')).toBe('unknown');
+        
+        // Test very long extension
+        expect(manager.detectLanguageFromPath('file.verylongextension')).toBe('unknown');
+    });
 });
