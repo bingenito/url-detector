@@ -10,6 +10,8 @@
   - `src/outputFormatter.ts`: Output formatting (table, json, csv)
   - `src/options.ts`: Option parsing and config
   - `src/logger.ts`: Logging abstraction
+  - `src/pathSanitizer.ts`: Path sanitization utilities
+  - `src/index.ts`: Package entry point for programmatic usage
   - `tests/`: Jest-based tests for all major modules
   - `examples/`: Realistic code samples in many languages for test/validation
 
@@ -19,6 +21,8 @@
 - **Build:**
   - `npm run build` (TypeScript → JavaScript)
   - `npm run clean` (remove build artifacts)
+  - `npm run dev` (watch mode for development)
+  - `npm run pkg` (create packaged executables for all platforms)
 - **Test:**
   - `npm test` (all tests)
   - `npm run test:watch` (watch mode)
