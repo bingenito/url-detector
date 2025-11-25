@@ -20,7 +20,8 @@
     "noImplicitThis": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "preserveConstEnums": true
+    "preserveConstEnums": true,
+    "types": ["node", "jest"]
   },
   "include": [
     "src/**/*"
