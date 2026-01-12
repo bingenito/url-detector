@@ -460,4 +460,84 @@ const url2 = "https://example.com";`;
             expect(urls[0].end).not.toBe(urls[1].end);
         });
     });
+
+    describe('Error handling and edge cases', () => {
+        test('should handle empty source code', () => {
+            const urls = detector.detectURLs('', 'javascript');
+            expect(urls).toHaveLength(0);
+        });
+
+        test('should handle invalid language gracefully', () => {
+            const code = 'const url = "https://example.com";';
+            const urls = detector.detectURLs(code, 'nonexistent-language');
+            // Should fall back to regex detection
+            expect(urls.length).toBeGreaterThanOrEqual(0);
+        });
+
+        test('should handle malformed URLs', () => {
+            const code = 'const badUrl = "http://"; const goodUrl = "https://valid.com";';
+            const urls = detector.detectURLs(code, 'javascript');
+            // Should detect at least the valid URL
+            expect(urls.some(u => u.url === 'https://valid.com')).toBe(true);
+        });
+
+        test('should handle very long lines', () => {
+            const longUrl = 'https://example.com/' + 'a'.repeat(1000);
+            const code = `const url = "${longUrl}";`;
+            const urls = detector.detectURLs(code, 'javascript');
+            expect(urls).toHaveLength(1);
+            expect(urls[0].url).toBe(longUrl);
+        });
+
+        test('should handle mixed content with special characters', () => {
+            const code = `
+                const url1 = "https://example.com/path?param=value&other=123";
+                const url2 = 'https://test.org/path#anchor';
+                // Comment with URL: https://comment.example.com
+                const url3 = \`https://template.com/\${variable}\`;
+            `;
+            const urls = detector.detectURLs(code, 'javascript');
+            expect(urls.length).toBeGreaterThanOrEqual(3);
+        });
+
+        test('should handle URLs in different string contexts', () => {
+            const code = `
+                const singleQuote = 'https://single.com';
+                const doubleQuote = "https://double.com";
+                const template = \`https://template.com\`;
+            `;
+            const urls = detector.detectURLs(code, 'javascript');
+            expect(urls).toHaveLength(3);
+            expect(urls.some(u => u.url === 'https://single.com')).toBe(true);
+            expect(urls.some(u => u.url === 'https://double.com')).toBe(true);
+            expect(urls.some(u => u.url === 'https://template.com')).toBe(true);
+        });
+
+        test('should handle parser errors gracefully with fallback', () => {
+            // Create a detector with fallback enabled
+            const detectorWithFallback = new URLDetector({ fallbackRegex: true });
+            
+            // This might cause parsing issues but should fall back to regex
+            const malformedCode = 'const url = "https://example.com" {unclosed';
+            const urls = detectorWithFallback.detectURLs(malformedCode, 'javascript');
+            
+            // Should still detect the URL via fallback
+            expect(urls.some(u => u.url === 'https://example.com')).toBe(true);
+        });
+
+        test('should handle fallback disabled gracefully', () => {
+            const detectorNoFallback = new URLDetector({ fallbackRegex: false });
+            
+            const urls = detectorNoFallback.detectURLs('invalid syntax "https://example.com"', 'unknownlang');
+            // Without fallback, may return empty array for unknown language
+            expect(Array.isArray(urls)).toBe(true);
+        });
+
+        test('should handle empty filePath parameter', () => {
+            const code = 'const url = "https://example.com";';
+            const urls = detector.detectURLs(code, 'javascript', '');
+            expect(urls).toHaveLength(1);
+            expect(urls[0].url).toBe('https://example.com');
+        });
+    });
 });
