@@ -15,6 +15,7 @@
 export { URLDetector } from './urlDetector';
 export { DetectorOptions } from './options';
 export { LanguageManager, LanguageConfig } from './languageManager';
+export { ParserPool } from './parserPool';
 export { URLFilter } from './urlFilter';
 export { OutputFormatter } from './outputFormatter';
 export { Logger, NullLogger, ConsoleLogger, ResultsOnlyLogger } from './logger';

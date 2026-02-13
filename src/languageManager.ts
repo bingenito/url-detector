@@ -13,6 +13,7 @@
  */
 
 import { Logger, NullLogger } from './logger';
+import { ParserPool } from './parserPool';
 import * as path from 'path';
 
 /**
@@ -72,6 +73,7 @@ export class LanguageManager {
     private languages: Map<string, unknown>;
     private languageConfigs: LanguageConfig[];
     private logger: Logger;
+    private parserPool: ParserPool;
 
     /**
      * Creates a new LanguageManager instance with optional custom configuration.
@@ -79,6 +81,7 @@ export class LanguageManager {
      * @param logger Optional logger instance for diagnostics and error reporting
      * @param customLanguages Optional array of custom language configurations.
      *                       If provided, replaces the default language set entirely.
+     * @param poolSize Maximum number of parser instances to pool per language (default: 10)
      *
      * @example
      * ```typescript
@@ -93,13 +96,34 @@ export class LanguageManager {
      *   { name: 'rust', module: 'tree-sitter-rust', extensions: ['.rs'] }
      * ];
      * const manager = new LanguageManager(logger, customLangs);
+     *
+     * // With custom pool size
+     * const manager = new LanguageManager(logger, undefined, 20);
      * ```
      */
-    constructor(logger?: Logger, customLanguages?: LanguageConfig[]) {
+    constructor(logger?: Logger, customLanguages?: LanguageConfig[], poolSize: number = 10) {
         this.languages = new Map();
         this.logger = logger || NullLogger;
         this.languageConfigs = customLanguages ? [...customLanguages] : [...LanguageManager.DEFAULT_LANGUAGES];
+        this.parserPool = new ParserPool(poolSize, this.logger);
         this.loadLanguages();
+    }
+
+    /**
+     * Gets the parser pool instance for advanced usage.
+     *
+     * Allows direct access to the parser pool for custom parser management scenarios.
+     *
+     * @returns The ParserPool instance used by this manager
+     *
+     * @example
+     * ```typescript
+     * const pool = manager.getParserPool();
+     * console.log(`JavaScript pool size: ${pool.getPoolSize('javascript')}`);
+     * ```
+     */
+    public getParserPool(): ParserPool {
+        return this.parserPool;
     }
 
     private loadLanguages(): void {

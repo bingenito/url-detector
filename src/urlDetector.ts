@@ -79,7 +79,6 @@ interface TreeSitterNode {
  */
 export class URLDetector {
     private options: DetectorOptions;
-    private parser: Parser;
     private languageManager: LanguageManager;
     private urlPattern: RegExp;
     private commonSchemaPatterns: RegExp[];
@@ -109,8 +108,7 @@ export class URLDetector {
     constructor(options: DetectorOptionsConfig = {}, logger: Logger = NullLogger) {
         this.options = new DetectorOptions(options);
         this.logger = logger;
-        this.parser = new Parser();
-        this.languageManager = new LanguageManager(this.logger);
+        this.languageManager = new LanguageManager(this.logger, undefined, this.options.concurrency);
         this.urlPattern = /(?:https?:\/\/|\/\/(?=[a-zA-Z0-9.-]+[a-zA-Z]))[^\s<>"'`${}]+/g;
         this.commonSchemaPatterns = [
             /^\/\/W3C\/\/DTD/i,
@@ -186,12 +184,15 @@ export class URLDetector {
                 return this.fallbackDetection(sourceCode, filePath);
             }
 
-            // Create a fresh parser instance to avoid conflicts
-            const parser = new Parser();
-            parser.setLanguage(languageGrammar as Parser.Language);
-            const tree = parser.parse(sourceCode);
-
-            return this.extractURLsFromTree(tree, sourceCode, filePath);
+            // Acquire a parser from the pool
+            const parser = this.languageManager.getParserPool().acquire(language, languageGrammar as Parser.Language);
+            try {
+                const tree = parser.parse(sourceCode);
+                return this.extractURLsFromTree(tree, sourceCode, filePath);
+            } finally {
+                // Always release the parser back to the pool
+                this.languageManager.getParserPool().release(language, parser);
+            }
         } catch (error: any) {
             if (this.options.fallbackRegex) {
                 this.logger.warn(
@@ -342,48 +343,52 @@ export class URLDetector {
                 return this.extractURLsFromString(scriptText, startIndex, 'string', fullSourceCode, sourceLines);
             }
 
-            // Parse the script content as JavaScript
-            const jsParser = new Parser();
-            jsParser.setLanguage(jsLanguage as Parser.Language);
-            const jsTree = jsParser.parse(scriptText);
+            // Acquire a parser from the pool for JavaScript
+            const jsParser = this.languageManager.getParserPool().acquire('javascript', jsLanguage as Parser.Language);
+            try {
+                const jsTree = jsParser.parse(scriptText);
 
-            const urls: URLMatch[] = [];
+                const urls: URLMatch[] = [];
 
-            // Traverse the JavaScript AST
-            const traverseJSNode = (node: any): void => {
-                const nodeType = node.type;
-                const text = scriptText.slice(node.startIndex, node.endIndex);
+                // Traverse the JavaScript AST
+                const traverseJSNode = (node: any): void => {
+                    const nodeType = node.type;
+                    const text = scriptText.slice(node.startIndex, node.endIndex);
 
-                if (this.isStringNode(node)) {
-                    const foundUrls = this.extractURLsFromString(
-                        text,
-                        startIndex + node.startIndex,
-                        'string',
-                        fullSourceCode,
-                        sourceLines,
-                    );
-                    urls.push(...foundUrls);
-                }
+                    if (this.isStringNode(node)) {
+                        const foundUrls = this.extractURLsFromString(
+                            text,
+                            startIndex + node.startIndex,
+                            'string',
+                            fullSourceCode,
+                            sourceLines,
+                        );
+                        urls.push(...foundUrls);
+                    }
 
-                if (this.isCommentNode(node)) {
-                    const foundUrls = this.extractURLsFromString(
-                        text,
-                        startIndex + node.startIndex,
-                        'comment',
-                        fullSourceCode,
-                        sourceLines,
-                    );
-                    urls.push(...foundUrls);
-                }
+                    if (this.isCommentNode(node)) {
+                        const foundUrls = this.extractURLsFromString(
+                            text,
+                            startIndex + node.startIndex,
+                            'comment',
+                            fullSourceCode,
+                            sourceLines,
+                        );
+                        urls.push(...foundUrls);
+                    }
 
-                // Traverse children
-                for (let i = 0; i < node.childCount; i++) {
-                    traverseJSNode(node.child(i));
-                }
-            };
+                    // Traverse children
+                    for (let i = 0; i < node.childCount; i++) {
+                        traverseJSNode(node.child(i));
+                    }
+                };
 
-            traverseJSNode(jsTree.rootNode);
-            return urls;
+                traverseJSNode(jsTree.rootNode);
+                return urls;
+            } finally {
+                // Always release the parser back to the pool
+                this.languageManager.getParserPool().release('javascript', jsParser);
+            }
         } catch (error: any) {
             // Fall back to regex if JavaScript parsing fails
             this.logger.warn(`Failed to parse script content as JavaScript, falling back to regex: ${error.message}`);
