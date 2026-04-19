@@ -16,11 +16,14 @@
 
 import { Command } from 'commander';
 import * as fs from 'fs';
-import { URLDetector } from './urlDetector';
+import { URLParser } from './urlParser';
+import { FileScanner } from './fileScanner';
+import { DetectorOptions } from './options';
 import { OutputFormat } from './options';
 import { ConsoleLogger, NullLogger, ResultsOnlyLogger } from './logger';
 import { OutputFormatter } from './outputFormatter';
-const packageJson = require('../package.json');
+import { LanguageManager } from './languageManager';
+import packageJson from '../package.json';
 
 const program = new Command();
 
@@ -68,25 +71,26 @@ program
                 excludePatterns = [...excludePatterns, ...fileExcludePatterns];
             }
 
-            // Create detector with options and logger
-            const detector = new URLDetector(
-                {
-                    scan: scanPatterns,
-                    exclude: excludePatterns,
-                    ignoreDomains: options.ignoreDomains as string[],
-                    includeComments: options.includeComments as boolean,
-                    includeNonFqdn: options.includeNonFqdn as boolean,
-                    format: options.format as OutputFormat,
-                    output: options.output as string,
-                    resultsOnly: options.resultsOnly as boolean,
-                    failOnError: options.failOnError as boolean,
-                    concurrency: options.concurrency as number,
-                },
-                logger,
-            );
+            // Initialize configuration and core components
+            const detectorOptions = new DetectorOptions({
+                scan: scanPatterns,
+                exclude: excludePatterns,
+                ignoreDomains: options.ignoreDomains as string[],
+                includeComments: options.includeComments as boolean,
+                includeNonFqdn: options.includeNonFqdn as boolean,
+                format: options.format as OutputFormat,
+                output: options.output as string,
+                resultsOnly: options.resultsOnly as boolean,
+                failOnError: options.failOnError as boolean,
+                concurrency: options.concurrency as number,
+            });
+
+            const languageManager = new LanguageManager(logger);
+            const parser = new URLParser(detectorOptions, languageManager, logger);
+            const scanner = new FileScanner(detectorOptions, parser, logger);
 
             // Process results
-            const results = await detector.process();
+            const results = await scanner.scan();
 
             // Calculate summary
             const totalFiles = results.length;
@@ -96,8 +100,8 @@ program
             if (totalUrls > 0) {
                 const outputFormatter = new OutputFormatter(
                     {
-                        format: (options.format as OutputFormat) || 'table',
-                        outputFile: (options.output as string) || null,
+                        format: (detectorOptions.format as OutputFormat) || 'table',
+                        outputFile: (detectorOptions.outputFile as string) || null,
 
                         withLineNumbers: true,
                         withFilenames: true,
@@ -113,7 +117,7 @@ program
             logger.info(`Processed ${totalFiles} file(s), found ${totalUrls} URL(s)`);
 
             // Exit with error code if URLs found and fail-on-error is set
-            if (options.failOnError && totalUrls > 0) {
+            if (detectorOptions.failOnError && totalUrls > 0) {
                 process.exit(1);
             }
         } catch (error: unknown) {
